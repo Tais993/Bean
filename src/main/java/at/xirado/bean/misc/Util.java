@@ -6,12 +6,15 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.interactions.components.Button;
 import net.dv8tion.jda.internal.utils.Checks;
+import okhttp3.Request;
+import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.helpers.MessageFormatter;
 
 import javax.annotation.Nonnull;
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Array;
 import java.security.CodeSource;
 import java.text.SimpleDateFormat;
@@ -43,6 +46,11 @@ public class Util
         return Bean.getInstance().getLavalink().getNodes().stream()
                 .mapToInt(x -> x.isAvailable() ? 1 : 0)
                 .sum();
+    }
+
+    public static Response makeGETRequest(String url) throws IOException
+    {
+        return Bean.getInstance().getOkHttpClient().newCall(new Request.Builder().url(url).get().build()).execute();
     }
 
     /**

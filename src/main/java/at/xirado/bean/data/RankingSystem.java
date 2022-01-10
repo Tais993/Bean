@@ -1,5 +1,6 @@
 package at.xirado.bean.data;
 
+import at.xirado.bean.Bean;
 import at.xirado.bean.data.database.Database;
 import at.xirado.bean.data.database.SQLBuilder;
 import at.xirado.bean.misc.Util;
@@ -7,6 +8,9 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.utils.data.DataArray;
 import net.dv8tion.jda.api.utils.data.DataObject;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,11 +22,14 @@ import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RankingSystem
 {
@@ -48,6 +55,8 @@ public class RankingSystem
     private static final int XP_BAR_WIDTH = CARD_WIDTH - AVATAR_SIZE - BORDER_SIZE * 3;
     private static final int XP_BAR_HEIGHT = CARD_HEIGHT / 5;
 
+    private static final Map<Long, BufferedImage> RANK_BACKGROUND_IMAGE_CACHE = new ConcurrentHashMap<>();
+
     static
     {
         try
@@ -57,6 +66,38 @@ public class RankingSystem
         } catch (FontFormatException | IOException e)
         {
             LOGGER.error("Couldn't load font from resources", e);
+        }
+    }
+
+    public static BufferedImage retrieveRankBackgroundImage(long userId) throws IOException
+    {
+        RankBackground rankBackground = getRankBackground(userId);
+        if (rankBackground == null)
+            return null;
+        if (RANK_BACKGROUND_IMAGE_CACHE.containsKey(userId))
+            return RANK_BACKGROUND_IMAGE_CACHE.get(userId);
+        Response response = Util.makeGETRequest(rankBackground.getURL());
+        if (!response.isSuccessful())
+            throw new RuntimeException("Encountered error code "+response.code());
+        BufferedImage bufferedImage = ImageIO.read(response.body().byteStream());
+        response.close();
+        RANK_BACKGROUND_IMAGE_CACHE.put(userId, bufferedImage);
+        return bufferedImage;
+    }
+
+    public static RankBackground getRankBackground(long userId)
+    {
+        var query = new SQLBuilder("SELECT image_url, accent_color FROM xp_backgrounds WHERE user_id = ?", userId);
+
+        try (var rs = query.executeQuery())
+        {
+            if (rs.next())
+                return new RankBackground(rs.getString("image_url"), Integer.parseInt(rs.getString("accent_color"), 16));
+            return null;
+        } catch (SQLException ex)
+        {
+            LOGGER.error("Could not get Rank background for user {}", userId, ex);
+            return null;
         }
     }
 
@@ -302,26 +343,24 @@ public class RankingSystem
             String card = getPreferredCard(user);
             var rankCard = new BufferedImage(CARD_WIDTH, CARD_HEIGHT, BufferedImage.TYPE_INT_ARGB);
             var g = rankCard.createGraphics();
-
             var background = RankingSystem.class.getResourceAsStream("/assets/wildcards/" + card + ".png");
-            if (background != null)
+            var customBackground = retrieveRankBackgroundImage(user.getIdLong());
+
+            var image = makeRoundedCorner(customBackground == null ? ImageIO.read(background) : customBackground, 60);
+            var width = image.getWidth();
+            var height = image.getHeight();
+            var drawWidth = 0;
+            var drawHeight = 0;
+            if (width > height)
             {
-                var image = makeRoundedCorner(ImageIO.read(background), 60);
-                var width = image.getWidth();
-                var height = image.getHeight();
-                var drawWidth = 0;
-                var drawHeight = 0;
-                if (width > height)
-                {
-                    drawWidth = width;
-                    drawHeight = width / CARD_RATIO;
-                } else
-                {
-                    drawHeight = height;
-                    drawWidth = height * CARD_RATIO;
-                }
-                g.drawImage(image.getSubimage(0, 0, drawWidth, drawHeight), 0, 0, CARD_WIDTH, CARD_HEIGHT, null);
+                drawWidth = width;
+                drawHeight = width / CARD_RATIO;
+            } else
+            {
+                drawHeight = height;
+                drawWidth = height * CARD_RATIO;
             }
+            g.drawImage(image.getSubimage(0, 0, drawWidth, drawHeight), 0, 0, CARD_WIDTH, CARD_HEIGHT, null);
 
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
