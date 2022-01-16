@@ -116,10 +116,12 @@ public class PlayCommand extends SlashCommand
             @Override
             public void trackLoaded(AudioTrack track)
             {
+                guildAudioPlayer.setChannelId(event.getChannel().getIdLong());
                 TrackInfo trackInfo = new TrackInfo(userId, channelId)
                         .setTrackUrl(track.getInfo().uri);
                 track.setUserData(trackInfo);
-                event.getHook().sendMessageEmbeds(MusicUtil.getAddedToQueueMessage(guildAudioPlayer, track)).queue();
+                guildAudioPlayer.getScheduler().queue(track);
+                event.getHook().sendMessageEmbeds(MusicUtil.getAddedToQueueMessage(guildAudioPlayer, track)).queue(m -> guildAudioPlayer.setMessageId(m.getIdLong()));
                 boolean isBookmarked = BookmarkCommand.getBookmark(event.getUser().getIdLong(), track.getInfo().uri) != null;
                 if (!Hints.hasAcknowledged(userId, "bookmark") && !isBookmarked)
                 {
@@ -129,7 +131,6 @@ public class PlayCommand extends SlashCommand
                             .queue();
                     Hints.sentUserHint(userId, "bookmark");
                 }
-                guildAudioPlayer.getScheduler().queue(track);
                 SearchEntry entry = new SearchEntry(track.getInfo().title, rawQuery, false);
                 if (!isDuplicate(member.getIdLong(), entry.getName()) && !isBookmarked)
                         addSearchEntry(member.getIdLong(), entry);
@@ -138,14 +139,15 @@ public class PlayCommand extends SlashCommand
             @Override
             public void playlistLoaded(AudioPlaylist playlist)
             {
+                guildAudioPlayer.setChannelId(event.getChannel().getIdLong());
                 if (playlist.isSearchResult())
                 {
                     AudioTrack single = (playlist.getSelectedTrack() == null) ? playlist.getTracks().get(0) : playlist.getSelectedTrack();
                     TrackInfo trackInfo = new TrackInfo(userId, channelId)
                             .setTrackUrl(single.getInfo().uri);
                     single.setUserData(trackInfo);
-                    event.getHook().sendMessageEmbeds(MusicUtil.getAddedToQueueMessage(guildAudioPlayer, single)).queue();
                     guildAudioPlayer.getScheduler().queue(single);
+                    event.getHook().sendMessageEmbeds(MusicUtil.getAddedToQueueMessage(guildAudioPlayer, single)).queue(m -> guildAudioPlayer.setMessageId(m.getIdLong()));
                     SearchEntry entry = new SearchEntry(event.getOption("query").getAsString(), event.getOption("query").getAsString(), false);
                     if (!isDuplicate(member.getIdLong(), entry.getName()))
                         addSearchEntry(member.getIdLong(), entry);
@@ -157,15 +159,6 @@ public class PlayCommand extends SlashCommand
                 {
                     amount += "\n**Now playing** " + Util.titleMarkdown(playlist.getTracks().get(0));
                 }
-                event.getHook().sendMessageEmbeds(ctx.getSimpleEmbed(amount)).queue();
-                if (!Hints.hasAcknowledged(userId, "bookmark") && !isBookmarked)
-                {
-                    event.getHook().sendMessageEmbeds(BOOKMARK_HINT_EMBED)
-                            .setEphemeral(true)
-                            .addActionRow(Util.getDontShowThisAgainButton("bookmark"))
-                            .queue();
-                    Hints.sentUserHint(userId, "bookmark");
-                }
                 playlist.getTracks().forEach(track ->
                 {
                     TrackInfo trackInfo = new TrackInfo(userId, channelId)
@@ -175,6 +168,15 @@ public class PlayCommand extends SlashCommand
                     track.setUserData(trackInfo);
                     guildAudioPlayer.getScheduler().queue(track);
                 });
+                event.getHook().sendMessageEmbeds(ctx.getSimpleEmbed(amount)).queue(m -> guildAudioPlayer.setMessageId(m.getIdLong()));
+                if (!Hints.hasAcknowledged(userId, "bookmark") && !isBookmarked)
+                {
+                    event.getHook().sendMessageEmbeds(BOOKMARK_HINT_EMBED)
+                            .setEphemeral(true)
+                            .addActionRow(Util.getDontShowThisAgainButton("bookmark"))
+                            .queue();
+                    Hints.sentUserHint(userId, "bookmark");
+                }
                 SearchEntry entry = new SearchEntry(playlist.getName(), event.getOption("query").getAsString(), true);
                 if (!isDuplicate(member.getIdLong(), entry.getName()) && !isBookmarked)
                     addSearchEntry(member.getIdLong(), entry);

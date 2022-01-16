@@ -25,16 +25,19 @@ public class AudioScheduler extends PlayerEventListenerAdapter
     private static final Logger log = LoggerFactory.getLogger(AudioScheduler.class);
 
     private final LavalinkPlayer player;
+    private final GuildAudioPlayer guildAudioPlayer;
     private final BlockingQueue<AudioTrack> queue;
     private final long guildId;
     private boolean repeat = false;
+    private boolean buttonSkip = false;
     private AudioTrack lastTrack;
 
-    public AudioScheduler(LavalinkPlayer player, long guildId)
+    public AudioScheduler(LavalinkPlayer player, long guildId, GuildAudioPlayer guildAudioPlayer)
     {
         this.guildId = guildId;
         this.player = player;
         this.queue = new LinkedBlockingQueue<>();
+        this.guildAudioPlayer = guildAudioPlayer;
     }
 
     public void queue(AudioTrack track)
@@ -67,6 +70,16 @@ public class AudioScheduler extends PlayerEventListenerAdapter
         else
             player.stopTrack();
 
+    }
+
+    public synchronized void setButtonSkip(boolean buttonSkip)
+    {
+        this.buttonSkip = buttonSkip;
+    }
+
+    public synchronized boolean isButtonSkip()
+    {
+        return buttonSkip;
     }
 
     public boolean isRepeat()
@@ -104,6 +117,8 @@ public class AudioScheduler extends PlayerEventListenerAdapter
                 stageChannel.getStageInstance().getManager().setTopic(MusicUtil.getStageTopicString(track)).queue();
             }
         }
+
+        guildAudioPlayer.updateMessage(track);
     }
 
     @Override

@@ -17,6 +17,11 @@ public class AudioManager
         this.audioPlayers = new ConcurrentHashMap<>();
     }
 
+    public synchronized boolean hasPlayer(long guildId)
+    {
+        return audioPlayers.containsKey(guildId);
+    }
+
     public synchronized GuildAudioPlayer getAudioPlayer(long guildId)
     {
         if (audioPlayers.containsKey(guildId))
